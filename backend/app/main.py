@@ -62,7 +62,7 @@ async def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         timestamp=datetime.now(timezone.utc),
-        groq_configured=bool(settings.groq_api_key),
+        gemini_configured=bool(settings.gemini_api_key),
         drive_configured=drive_service.configured,
         local_folder_exists=local_service.configured,
         local_folder=str(settings.local_assignment_dir),

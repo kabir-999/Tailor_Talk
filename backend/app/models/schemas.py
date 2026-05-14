@@ -58,7 +58,7 @@ class SearchResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     timestamp: datetime
-    groq_configured: bool
+    gemini_configured: bool
     drive_configured: bool
     local_folder_exists: bool
     local_folder: str
