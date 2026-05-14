@@ -94,6 +94,26 @@ class DriveDiscoveryAgent:
         query_explanation = self._combine_explanations(tool_payloads)
         if results:
             self.memory.set_last_results(conversation_id, [result.model_dump() for result in results])
+        if self._is_content_request(message) and results:
+            answer = self._content_answer(message, results, previous_results)
+            self.memory.append_ai(conversation_id, answer)
+            self.memory.add_search(
+                conversation_id,
+                {
+                    "message": message,
+                    "mode": search_mode.value,
+                    "result_count": len(results),
+                    "query_explanation": query_explanation,
+                },
+            )
+            return ChatResponse(
+                conversation_id=conversation_id,
+                answer=answer,
+                results=results,
+                query_explanation=query_explanation,
+                suggested_followups=[],
+                search_history=self.memory.search_history(conversation_id),
+            )
         answer = self._final_answer(message, search_mode, tool_payloads, results, previous_results)
         self.memory.append_ai(conversation_id, answer)
         self.memory.add_search(
@@ -290,6 +310,95 @@ class DriveDiscoveryAgent:
         return any(word in lowered for word in cleanup_words) and not any(
             word in lowered for word in ("find", "search", "list all", "show files")
         )
+
+    @staticmethod
+    def _is_content_request(message: str) -> bool:
+        lowered = message.lower()
+        content_words = (
+            "ocr",
+            "read",
+            "extract",
+            "summarize",
+            "summary",
+            "what is written",
+            "what's written",
+            "whats written",
+            "what is inside",
+            "what's inside",
+            "whats inside",
+            "what does",
+            "what says",
+            "content",
+            "inside it",
+        )
+        return any(word in lowered for word in content_words)
+
+    def _content_answer(
+        self,
+        message: str,
+        results: list[FileResult],
+        previous_results: list[dict[str, Any]] | None = None,
+    ) -> str:
+        result = self._best_content_result(message, results, previous_results)
+        if result.source != "local" or not result.path:
+            locator = result.link or result.file_id or result.name
+            return (
+                f"I found {result.name}, but I can only extract readable contents from local files in this deployment. "
+                f"Open it here: {locator}\n\nNext prompt: \"Search local files for {result.name}\""
+            )
+
+        extracted = self.local_service.summarize_file(result.path, max_chars=3000)
+        if self.llm and any(word in message.lower() for word in ("summarize", "summary")):
+            try:
+                response = self.llm.invoke(
+                    [
+                        SystemMessage(
+                            content=(
+                                "Summarize the extracted file text directly. Do not list matching files. "
+                                "Do not add follow-up suggestions except the final required next prompt."
+                            )
+                        ),
+                        HumanMessage(content=f"User request: {message}\n\nFile: {result.name}\n\nExtracted text:\n{extracted}"),
+                    ]
+                )
+                summary = str(response.content).strip()
+                return f"{summary}\n\nNext prompt: \"Show the full extracted text\""
+            except Exception:
+                logger.exception("Content summary LLM call failed")
+
+        return (
+            f"Extracted text from {result.name}:\n\n"
+            f"{extracted}\n\n"
+            f"Next prompt: \"Clean and format this extracted text\""
+        )
+
+    @staticmethod
+    def _best_content_result(
+        message: str,
+        results: list[FileResult],
+        previous_results: list[dict[str, Any]] | None = None,
+    ) -> FileResult:
+        lowered = message.lower()
+        candidates = results
+        filename_match = re.search(
+            r"([\w][\w .-]*?\.(?:pdf|docx|txt|csv|xlsx|xls|png|jpg|jpeg|webp|gif|mp4|mov|m4v))",
+            lowered,
+            flags=re.IGNORECASE,
+        )
+        if filename_match:
+            requested = re.sub(r"\s+", " ", filename_match.group(1).casefold()).strip()
+            for result in sorted(candidates, key=lambda item: item.source != "local"):
+                name = re.sub(r"\s+", " ", result.name.casefold()).strip()
+                path = re.sub(r"\s+", " ", (result.path or "").casefold()).strip()
+                if requested in name or requested in path:
+                    return result
+
+        if previous_results:
+            for item in previous_results:
+                previous = item if isinstance(item, FileResult) else FileResult(**item)
+                if previous.name.lower() in lowered or (previous.path and previous.path.lower() in lowered):
+                    return previous
+        return candidates[0]
 
     def _cleanup_text_answer(self, message: str, conversation_id: str) -> str:
         text = self._cleanup_source_text(message, conversation_id)

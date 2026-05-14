@@ -381,6 +381,8 @@ GOOGLE_SERVICE_ACCOUNT_JSON_B64 = "base64_encoded_service_account_json"
 
 If you later deploy FastAPI separately, set `FASTAPI_URL` to that backend URL and the Streamlit UI will call it over HTTP.
 
+The root `packages.txt` installs Tesseract and Poppler on Streamlit Cloud so image OCR and scanned-PDF OCR can return extracted text instead of only matching filenames.
+
 ## Screenshot Placeholders
 
 Add screenshots here after deployment:
