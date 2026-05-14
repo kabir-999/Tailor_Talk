@@ -11,7 +11,7 @@ from langchain_core.tools import StructuredTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.agent.chains import DriveQueryChain
-from app.agent.memory import ConversationMemory
+from app.agent.memory import SQLiteMemory
 from app.agent.prompts import AGENT_SYSTEM_PROMPT, FINAL_RESPONSE_PROMPT
 from app.agent.tools import build_tools
 from app.config import Settings
@@ -28,7 +28,7 @@ class DriveDiscoveryAgent:
         settings: Settings,
         drive_service: GoogleDriveService,
         local_service: LocalSearchService,
-        memory: ConversationMemory,
+        memory: SQLiteMemory,
     ) -> None:
         self.settings = settings
         self.drive_service = drive_service

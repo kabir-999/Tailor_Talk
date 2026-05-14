@@ -7,7 +7,7 @@ from fastapi import File, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent.graph import DriveDiscoveryAgent
-from app.agent.memory import ConversationMemory
+from app.agent.memory import SQLiteMemory
 from app.config import get_settings
 from app.models.schemas import (
     ChatRequest,
@@ -44,7 +44,7 @@ app.add_middleware(
 
 drive_service = GoogleDriveService(settings)
 local_service = LocalSearchService(settings.local_assignment_dir, uploads_only=settings.search_uploads_only)
-memory = ConversationMemory()
+memory = SQLiteMemory(settings.local_assignment_dir / "memory.db")
 agent = DriveDiscoveryAgent(settings, drive_service, local_service, memory)
 
 
