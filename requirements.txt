@@ -7,7 +7,7 @@ python-dotenv==1.0.1
 pydantic==2.10.4
 pydantic-settings==2.7.1
 langchain==0.3.13
-pinecone-client>=3.2.2
+pinecone>=5.0.1
 langchain-pinecone>=0.1.0
 langchain-core==0.3.28
 langchain-google-genai>=2.0.7
