@@ -483,15 +483,24 @@ class DriveDiscoveryAgent:
                 if len(after) > 20:
                     return after
 
+        # Fallback: search history for the most recent extracted text block
         messages = self.memory.get_messages(conversation_id)
-        for previous in reversed(messages[:-1]):
-            content = str(previous.content).strip()
-            if len(content) > 20 and "Next prompt:" not in content:
-                return content
-        for previous in reversed(messages[:-1]):
-            content = str(previous.content).strip()
-            if len(content) > 20:
-                return content
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                content = str(msg.content).strip()
+                # If it looks like an extraction block, strip the footer and return the meat
+                if "Extracted text from" in content:
+                    # Strip the "Next prompt:" footer if present
+                    if "Next prompt:" in content:
+                        content = content.split("Next prompt:")[0].strip()
+                    # Strip the "Extracted text from ..." header
+                    if ":\n\n" in content:
+                        content = content.split(":\n\n", 1)[1].strip()
+                    if len(content) > 20:
+                        return content
+                # If it's a long AI response that doesn't have the "Next prompt" (likely already cleaned text)
+                if len(content) > 100 and "Next prompt:" not in content:
+                    return content
         return ""
 
     @staticmethod
