@@ -436,19 +436,19 @@ class DriveDiscoveryAgent:
 
         if self.llm:
             try:
-                response = self.llm.invoke(
-                    [
-                        SystemMessage(
-                            content=(
-                                "Clean and properly format noisy OCR/chat text. "
-                                "Do not search for files. Do not mention missing files. "
-                                "Preserve useful factual content, remove obvious OCR garbage, "
-                                "fix spacing and line breaks, and return only the cleaned text."
-                            )
-                        ),
-                        HumanMessage(content=text),
-                    ]
-                )
+                messages = [
+                    SystemMessage(
+                        content=(
+                            "Clean and properly format noisy OCR/chat text. "
+                            "Do not search for files. Do not mention missing files. "
+                            "Preserve useful factual content, remove obvious OCR garbage, "
+                            "fix spacing and line breaks, and return only the cleaned text."
+                        )
+                    ),
+                    *self.memory.get_messages(conversation_id),
+                    HumanMessage(content=f"Please clean this extracted text:\n\n{text}"),
+                ]
+                response = self.llm.invoke(messages)
                 cleaned = str(response.content).strip()
                 return f"{cleaned}\n\nNext prompt: \"Summarize this cleaned text\""
             except Exception:
