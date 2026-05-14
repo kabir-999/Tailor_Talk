@@ -441,6 +441,9 @@ class DriveDiscoveryAgent:
                         content=(
                             "You are a text cleanup assistant. Your ONLY job is to clean and format the provided noisy OCR/chat text.\n"
                             "Do not search for files. Do not mention missing files. Do NOT repeat previous user queries.\n"
+                            "CRITICAL INSTRUCTION: The user may have asked to perform OCR on an image in the conversation history. "
+                            "IGNORE any requests to process images. You do NOT need to process any images. "
+                            "You are ONLY cleaning the text provided in the final prompt.\n"
                             "Preserve useful factual content, remove obvious OCR garbage (like UI artifacts, timestamps, garbled characters),\n"
                             "fix spacing and line breaks, and return ONLY the cleaned text."
                         )
