@@ -439,17 +439,16 @@ class DriveDiscoveryAgent:
                 messages = [
                     SystemMessage(
                         content=(
-                            "You are a text cleanup assistant. Your ONLY job is to clean and format the provided noisy OCR/chat text.\n"
-                            "Do not search for files. Do not mention missing files. Do NOT repeat previous user queries.\n"
-                            "CRITICAL INSTRUCTION: The user may have asked to perform OCR on an image in the conversation history. "
-                            "IGNORE any requests to process images. You do NOT need to process any images. "
-                            "You are ONLY cleaning the text provided in the final prompt.\n"
-                            "Preserve useful factual content, remove obvious OCR garbage (like UI artifacts, timestamps, garbled characters),\n"
-                            "fix spacing and line breaks, and return ONLY the cleaned text."
+                            "You are a specialized text transformation engine. Your ONLY task is to clean up and format the following raw OCR text.\n"
+                            "RULES:\n"
+                            "1. Remove obvious OCR errors, UI fragments (e.g. '1:50 pm', 'Chat reset'), and garbled characters.\n"
+                            "2. Fix spelling and formatting while preserving all factual data.\n"
+                            "3. DO NOT add any conversational filler. DO NOT comment on the task.\n"
+                            "4. DO NOT repeat the user's previous instructions or mention any files.\n"
+                            "5. Return ONLY the high-quality cleaned text."
                         )
                     ),
-                    *self.memory.get_messages(conversation_id),
-                    HumanMessage(content=f"Please clean this extracted text:\n\n{text}"),
+                    HumanMessage(content=f"Raw text to clean and format:\n\n{text}"),
                 ]
                 response = self.llm.invoke(messages)
                 cleaned = str(response.content).strip()
