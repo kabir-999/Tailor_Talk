@@ -103,7 +103,7 @@ def backend_get(path: str) -> requests.Response:
             {
                 "status": "ok",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "groq_configured": bool(settings.groq_api_key),
+                "gemini_configured": bool(settings.gemini_api_key),
                 "drive_configured": drive_service.configured,
                 "local_folder_exists": local_service.configured,
                 "local_folder": str(settings.local_assignment_dir),
@@ -220,7 +220,7 @@ with st.sidebar:
     try:
         health = backend_get("/health").json()
         health_placeholder.success("Backend healthy")
-        st.caption(f"Groq: {'configured' if health.get('groq_configured') else 'missing'}")
+        st.caption(f"Gemini: {'configured' if health.get('gemini_configured') else 'missing'}")
         st.caption(f"Local folder: {'found' if health.get('local_folder_exists') else 'missing'}")
         st.caption(f"Uploaded files: {health.get('uploaded_file_count', 0)}")
         st.caption(f"Folder: {health.get('local_folder', '')}")

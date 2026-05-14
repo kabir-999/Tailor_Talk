@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import StructuredTool
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.agent.chains import DriveQueryChain
 from app.agent.memory import ConversationMemory
@@ -38,13 +38,13 @@ class DriveDiscoveryAgent:
         self.tools = build_tools(drive_service, local_service, self.drive_query_chain)
         self.tools_by_name: dict[str, StructuredTool] = {tool.name: tool for tool in self.tools}
         self.llm = (
-            ChatGroq(
-                api_key=settings.groq_api_key,
-                model=settings.groq_model,
+            ChatGoogleGenerativeAI(
+                api_key=settings.gemini_api_key,
+                model=settings.gemini_model,
                 temperature=0.2,
                 max_tokens=2048,
             )
-            if settings.groq_api_key
+            if settings.gemini_api_key
             else None
         )
 

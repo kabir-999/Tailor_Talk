@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
 from app.agent.prompts import DRIVE_QUERY_SYSTEM_PROMPT
@@ -25,13 +25,13 @@ class DriveQueryChain:
         self.settings = settings
         self.fallback = DriveQueryBuilder(settings.google_drive_folder_id)
         self.llm = (
-            ChatGroq(
-                api_key=settings.groq_api_key,
-                model=settings.groq_model,
+            ChatGoogleGenerativeAI(
+                api_key=settings.gemini_api_key,
+                model=settings.gemini_model,
                 temperature=0.1,
                 max_tokens=1024,
             )
-            if settings.groq_api_key
+            if settings.gemini_api_key
             else None
         )
 
