@@ -216,17 +216,6 @@ init_state()
 
 with st.sidebar:
     st.header("Controls")
-    health_placeholder = st.empty()
-    try:
-        health = backend_get("/health").json()
-        health_placeholder.success("Backend healthy")
-        st.caption(f"Gemini: {'configured' if health.get('gemini_configured') else 'missing'}")
-        st.caption(f"Local folder: {'found' if health.get('local_folder_exists') else 'missing'}")
-        st.caption(f"Uploaded files: {health.get('uploaded_file_count', 0)}")
-        st.caption(f"Folder: {health.get('local_folder', '')}")
-    except Exception:
-        health_placeholder.error("Backend unavailable")
-
     st.session_state.search_mode = "hybrid"
 
     st.subheader("Upload files")
