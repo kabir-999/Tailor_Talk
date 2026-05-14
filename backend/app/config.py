@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     google_service_account_json: str | None = Field(
         default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON"
     )
+    google_service_account_json_b64: str | None = Field(
+        default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON_B64"
+    )
     google_drive_folder_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_FOLDER_ID")
     fastapi_url: str = Field(default="http://localhost:8000", alias="FASTAPI_URL")
     local_assignment_path: str = Field(

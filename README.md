@@ -325,6 +325,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 ```
 
 `GOOGLE_APPLICATION_CREDENTIALS` is only for local file paths. Do not set it to a `/Users/...` path on Fly.io.
+If your hosting provider's secret editor mangles multiline JSON, use `GOOGLE_SERVICE_ACCOUNT_JSON_B64` instead.
 
 ### Railway Inactivity
 
@@ -368,6 +369,12 @@ LOG_LEVEL=INFO
 ```env
 GOOGLE_DRIVE_FOLDER_ID=your_drive_folder_id
 GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+```
+
+If TOML quoting causes credential errors, use a base64 value instead:
+
+```toml
+GOOGLE_SERVICE_ACCOUNT_JSON_B64 = "base64_encoded_service_account_json"
 ```
 
 6. Deploy and confirm the sidebar health check is green.

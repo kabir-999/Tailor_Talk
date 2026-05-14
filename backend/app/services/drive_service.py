@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import json
+import base64
 import re
 from calendar import month_name
 from datetime import datetime, timedelta, timezone
@@ -154,6 +155,7 @@ class GoogleDriveService:
         credentials_path = self.settings.google_application_credentials
         return bool(
             self.settings.google_service_account_json
+            or self.settings.google_service_account_json_b64
             or (credentials_path and Path(credentials_path).expanduser().exists())
         )
 
@@ -162,10 +164,14 @@ class GoogleDriveService:
             return self._service
         if not self.configured:
             raise RuntimeError(
-                "Google Drive is not configured. Set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS."
+                "Google Drive is not configured. Set GOOGLE_SERVICE_ACCOUNT_JSON, "
+                "GOOGLE_SERVICE_ACCOUNT_JSON_B64, or GOOGLE_APPLICATION_CREDENTIALS."
             )
-        if self.settings.google_service_account_json:
-            credentials_info = json.loads(self.settings.google_service_account_json)
+        if self.settings.google_service_account_json or self.settings.google_service_account_json_b64:
+            credentials_json = self.settings.google_service_account_json
+            if self.settings.google_service_account_json_b64:
+                credentials_json = base64.b64decode(self.settings.google_service_account_json_b64).decode("utf-8")
+            credentials_info = json.loads(credentials_json or "{}")
             credentials = service_account.Credentials.from_service_account_info(
                 credentials_info,
                 scopes=DRIVE_SCOPES,
