@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     google_application_credentials: str | None = Field(
         default=None, alias="GOOGLE_APPLICATION_CREDENTIALS"
     )
+    google_service_account_json: str | None = Field(
+        default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON"
+    )
     google_drive_folder_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_FOLDER_ID")
     fastapi_url: str = Field(default="http://localhost:8000", alias="FASTAPI_URL")
     local_assignment_path: str = Field(

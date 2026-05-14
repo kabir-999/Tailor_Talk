@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import re
 from calendar import month_name
 from datetime import datetime, timedelta, timezone
@@ -150,20 +151,30 @@ class GoogleDriveService:
 
     @property
     def configured(self) -> bool:
-        credentials = self.settings.google_application_credentials
-        return bool(credentials and Path(credentials).expanduser().exists())
+        credentials_path = self.settings.google_application_credentials
+        return bool(
+            self.settings.google_service_account_json
+            or (credentials_path and Path(credentials_path).expanduser().exists())
+        )
 
     def _client(self) -> Any:
         if self._service is not None:
             return self._service
         if not self.configured:
             raise RuntimeError(
-                "Google Drive is not configured. Set GOOGLE_APPLICATION_CREDENTIALS to a service account JSON file."
+                "Google Drive is not configured. Set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS."
             )
-        credentials = service_account.Credentials.from_service_account_file(
-            str(Path(self.settings.google_application_credentials or "").expanduser()),
-            scopes=DRIVE_SCOPES,
-        )
+        if self.settings.google_service_account_json:
+            credentials_info = json.loads(self.settings.google_service_account_json)
+            credentials = service_account.Credentials.from_service_account_info(
+                credentials_info,
+                scopes=DRIVE_SCOPES,
+            )
+        else:
+            credentials = service_account.Credentials.from_service_account_file(
+                str(Path(self.settings.google_application_credentials or "").expanduser()),
+                scopes=DRIVE_SCOPES,
+            )
         self._service = build("drive", "v3", credentials=credentials, cache_discovery=False)
         return self._service
 

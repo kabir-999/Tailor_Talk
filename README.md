@@ -257,7 +257,7 @@ Deploy the FastAPI backend to Railway and the Streamlit UI separately. Railway s
 1. Push this repository to GitHub.
 2. Create a new Railway project from the repo.
 3. Keep the Railway service root directory as `/` so the top-level `Assignment/` corpus is included in the deployment.
-4. Keep the Nixpacks builder selected. The included root `nixpacks.toml` installs backend dependencies and system packages needed for OCR.
+4. Use the root `Dockerfile` builder.
 5. Add environment variables:
 
 ```env
@@ -274,15 +274,15 @@ Leave `LOCAL_ASSIGNMENT_PATH` unset for the bundled top-level `Assignment/` fold
 
 ```env
 GOOGLE_DRIVE_FOLDER_ID=your_drive_folder_id
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 ```
 
-For service account credentials, upload the JSON as a Railway file/secret and set `GOOGLE_APPLICATION_CREDENTIALS` to its mounted path. Do not commit the JSON key.
+For service account credentials, paste the full JSON key into `GOOGLE_SERVICE_ACCOUNT_JSON` as a secret variable. Do not commit the JSON key.
 
-Railway will use the root `railway.json`:
+Railway will use the root `Dockerfile`, which starts:
 
 ```bash
-cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
 ```
 
 After deployment, open:
@@ -292,6 +292,39 @@ https://your-railway-backend.up.railway.app/health
 ```
 
 The response should show `status: "ok"`, `groq_configured: true`, and `local_folder_exists: true`.
+
+## Fly.io Deployment
+
+Deploy the FastAPI backend from this repository using the root `Dockerfile`.
+
+Recommended Fly settings:
+
+- Builder: Dockerfile
+- Dockerfile path: `/Dockerfile`
+- Internal port: `8080`
+- Healthcheck path: `/health`
+
+Add these app secrets/environment variables:
+
+```env
+PORT=8080
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=openai/gpt-oss-120b
+FASTAPI_URL=http://localhost:8000
+SEARCH_UPLOADS_ONLY=false
+CORS_ORIGINS=*
+MAX_SEARCH_RESULTS=10
+LOG_LEVEL=INFO
+```
+
+For Google Drive search, also add:
+
+```env
+GOOGLE_DRIVE_FOLDER_ID=your_drive_folder_id
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+```
+
+`GOOGLE_APPLICATION_CREDENTIALS` is only for local file paths. Do not set it to a `/Users/...` path on Fly.io.
 
 ### Railway Inactivity
 

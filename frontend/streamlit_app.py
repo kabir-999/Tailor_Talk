@@ -113,8 +113,17 @@ with st.sidebar:
     except Exception:
         health_placeholder.error("Backend unavailable")
 
-    st.info("Search scope: Assignment folder + uploaded files")
-    st.session_state.search_mode = "local"
+    mode_labels = {
+        "local": "Local files",
+        "drive": "Google Drive",
+        "hybrid": "Local + Drive",
+    }
+    selected_mode = st.radio(
+        "Search scope",
+        options=list(mode_labels.keys()),
+        format_func=mode_labels.get,
+    )
+    st.session_state.search_mode = selected_mode
 
     st.divider()
     st.subheader("Upload files")
