@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import io
 import logging
 import json
 import base64
 import re
+import tempfile
 from calendar import month_name
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -240,3 +242,74 @@ class GoogleDriveService:
         type_bonus = 0.15 if any(alias in query.lower() and mime in mime_type for alias, mime in MIME_ALIASES.items()) else 0.0
         rank_penalty = min(index * 0.03, 0.25)
         return round(max(0.35, min(0.98, 0.65 + overlap * 0.25 + type_bonus - rank_penalty)), 2)
+
+    # ── Google-native export MIME mapping ──────────────────────────────────
+    _EXPORT_MAP: dict[str, tuple[str, str]] = {
+        "application/vnd.google-apps.document": ("text/plain", ".txt"),
+        "application/vnd.google-apps.spreadsheet": ("text/csv", ".csv"),
+        "application/vnd.google-apps.presentation": ("application/pdf", ".pdf"),
+        "application/vnd.google-apps.drawing": ("application/pdf", ".pdf"),
+    }
+
+    def download_file(self, file_id: str, mime_type: str) -> tuple[bytes, str]:
+        """Download or export a file from Drive.
+
+        Returns (raw_bytes, effective_extension).
+        For Google-native types the file is exported; for regular files it is
+        downloaded directly.
+        """
+        export_info = self._EXPORT_MAP.get(mime_type)
+        if export_info:
+            export_mime, ext = export_info
+            data = self._client().files().export(fileId=file_id, mimeType=export_mime).execute()
+            return data, ext
+
+        # Regular binary file – download via media
+        request = self._client().files().get_media(fileId=file_id)
+        buffer = io.BytesIO()
+        from googleapiclient.http import MediaIoBaseDownload
+
+        downloader = MediaIoBaseDownload(buffer, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+        ext = Path(mime_type.split("/")[-1]).suffix or ""
+        return buffer.getvalue(), ext
+
+    def extract_content(self, file_id: str, mime_type: str, filename: str, max_chars: int = 3000) -> str:
+        """Download a Drive file and extract readable text from it.
+
+        Uses a temporary file and delegates to LocalSearchService's extraction
+        helpers so every supported format is handled identically to local files.
+        """
+        from app.services.local_search import LocalSearchService
+
+        raw_bytes, export_ext = self.download_file(file_id, mime_type)
+
+        # Determine a useful suffix for the temp file
+        suffix = Path(filename).suffix.lower()
+        if not suffix or suffix == ".":
+            suffix = export_ext or ".bin"
+
+        tmp_dir = None
+        try:
+            tmp_dir = tempfile.mkdtemp(prefix="drive_extract_")
+            tmp_path = Path(tmp_dir) / f"drive_file{suffix}"
+            tmp_path.write_bytes(raw_bytes if isinstance(raw_bytes, bytes) else raw_bytes.encode("utf-8"))
+
+            # Re-use the local-search extraction pipeline
+            service = LocalSearchService.__new__(LocalSearchService)
+            service.root = Path(tmp_dir)
+            service.uploads_only = False
+            service.cache_dir = Path(tmp_dir) / ".cache"
+            doc = service._load_document(tmp_path, allow_ocr=True)
+            text = " ".join(doc.content.split())
+            return text[:max_chars] + ("..." if len(text) > max_chars else "")
+        except Exception as exc:
+            logger.exception("Drive content extraction failed for %s", filename)
+            return f"Failed to extract content from {filename}: {exc}"
+        finally:
+            if tmp_dir:
+                import shutil
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+

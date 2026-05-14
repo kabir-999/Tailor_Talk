@@ -341,15 +341,38 @@ class DriveDiscoveryAgent:
         previous_results: list[dict[str, Any]] | None = None,
     ) -> str:
         result = self._best_content_result(message, results, previous_results)
-        if result.source != "local" or not result.path:
+
+        # ── Extract text from the file ────────────────────────────────────
+        extracted: str | None = None
+
+        if result.source == "local" and result.path:
+            extracted = self.local_service.summarize_file(result.path, max_chars=3000)
+        elif result.source == "google_drive" and result.file_id:
+            # Download from Drive and extract content
+            try:
+                extracted = self.drive_service.extract_content(
+                    file_id=result.file_id,
+                    mime_type=result.type,
+                    filename=result.name,
+                    max_chars=3000,
+                )
+                # Check for extraction failure messages
+                if extracted and extracted.startswith("Failed to extract"):
+                    extracted = None
+            except Exception:
+                logger.exception("Drive content extraction failed for %s", result.name)
+                extracted = None
+
+        # Fallback: could not extract from either source
+        if not extracted:
             locator = result.link or result.file_id or result.name
             return (
-                f"I found {result.name}, but I can only extract readable contents from local files in this deployment. "
+                f"I found {result.name}, but I could not extract readable contents from it. "
                 f"Open it here: {locator}\n\nNext prompt: \"Search local files for {result.name}\""
             )
 
-        extracted = self.local_service.summarize_file(result.path, max_chars=3000)
         self.memory.set_last_extracted_text(conversation_id, extracted)
+
         if self.llm and any(word in message.lower() for word in ("summarize", "summary")):
             try:
                 response = self.llm.invoke(
@@ -368,8 +391,9 @@ class DriveDiscoveryAgent:
             except Exception:
                 logger.exception("Content summary LLM call failed")
 
+        source_label = "Google Drive" if result.source == "google_drive" else "local"
         return (
-            f"Extracted text from {result.name}:\n\n"
+            f"Extracted text from {result.name} ({source_label}):\n\n"
             f"{extracted}\n\n"
             f"Next prompt: \"Clean and format this extracted text\""
         )

@@ -227,7 +227,7 @@ with st.sidebar:
     except Exception:
         health_placeholder.error("Backend unavailable")
 
-    st.session_state.search_mode = "local"
+    st.session_state.search_mode = "hybrid"
 
     st.subheader("Upload files")
     uploads = st.file_uploader(
