@@ -1,16 +1,26 @@
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timezone
 import html
 import os
+import sys
+from pathlib import Path
 from typing import Any
 
 import requests
 import streamlit as st
 from dotenv import load_dotenv
 
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+BACKEND_DIR = PROJECT_DIR / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 load_dotenv()
 
 DEFAULT_BACKEND = os.getenv("FASTAPI_URL", "http://localhost:8000").rstrip("/")
+DIRECT_BACKEND_VALUES = {"", "direct", "local", "in-process", "http://localhost:8000"}
 
 st.set_page_config(
     page_title="Local File Discovery Agent",
@@ -45,20 +55,144 @@ def init_state() -> None:
     st.session_state.setdefault("last_results", [])
 
 
+class LocalResponse:
+    def __init__(self, payload: dict[str, Any], status_code: int = 200) -> None:
+        self.payload = payload
+        self.status_code = status_code
+
+    def json(self) -> dict[str, Any]:
+        return self.payload
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(self.payload.get("detail", "Request failed"))
+
+
+def direct_mode() -> bool:
+    return st.session_state.backend_url.rstrip("/") in DIRECT_BACKEND_VALUES
+
+
+@st.cache_resource
+def direct_services() -> dict[str, Any]:
+    from app.agent.graph import DriveDiscoveryAgent
+    from app.agent.memory import ConversationMemory
+    from app.config import get_settings
+    from app.services.drive_service import GoogleDriveService
+    from app.services.local_search import LocalSearchService
+    from app.utils.logging import configure_logging
+
+    settings = get_settings()
+    configure_logging(settings.log_level)
+    drive_service = GoogleDriveService(settings)
+    local_service = LocalSearchService(
+        settings.local_assignment_dir,
+        uploads_only=settings.search_uploads_only,
+    )
+    memory = ConversationMemory()
+    agent = DriveDiscoveryAgent(settings, drive_service, local_service, memory)
+    return {
+        "settings": settings,
+        "drive_service": drive_service,
+        "local_service": local_service,
+        "agent": agent,
+    }
+
+
+def run_async(coro: Any) -> Any:
+    return asyncio.run(coro)
+
+
 def backend_get(path: str) -> requests.Response:
+    if direct_mode():
+        services = direct_services()
+        settings = services["settings"]
+        drive_service = services["drive_service"]
+        local_service = services["local_service"]
+        if path == "/health":
+            return LocalResponse(
+                {
+                    "status": "ok",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "groq_configured": bool(settings.groq_api_key),
+                    "drive_configured": drive_service.configured,
+                    "local_folder_exists": local_service.configured,
+                    "local_folder": str(settings.local_assignment_dir),
+                    "search_uploads_only": settings.search_uploads_only,
+                    "uploaded_file_count": len(local_service.list_uploads()) if local_service.configured else 0,
+                }
+            )
+        if path == "/uploads":
+            return LocalResponse({"files": [item.model_dump() for item in local_service.list_uploads()]})
+        return LocalResponse({"detail": "Not found"}, status_code=404)
     return requests.get(f"{st.session_state.backend_url}{path}", timeout=8)
 
 
 def backend_post(path: str, payload: dict[str, Any]) -> requests.Response:
+    if direct_mode():
+        agent = direct_services()["agent"]
+        from app.models.schemas import SearchMode
+
+        search_mode = SearchMode(payload.get("search_mode", "local"))
+        if path == "/chat":
+            response = run_async(
+                agent.chat(
+                    message=payload["message"],
+                    conversation_id=payload.get("conversation_id"),
+                    search_mode=search_mode,
+                )
+            )
+            return LocalResponse(response.model_dump())
+        if path == "/search":
+            response = run_async(
+                agent.search(
+                    query=payload["query"],
+                    search_mode=search_mode,
+                    limit=payload.get("limit", 10),
+                )
+            )
+            return LocalResponse(response.model_dump())
+        return LocalResponse({"detail": "Not found"}, status_code=404)
     return requests.post(f"{st.session_state.backend_url}{path}", json=payload, timeout=180)
 
 
 def backend_upload(file: Any) -> requests.Response:
+    if direct_mode():
+        local_service = direct_services()["local_service"]
+        content = file.getvalue()
+        if not content:
+            return LocalResponse({"detail": "Uploaded file is empty."}, status_code=400)
+        try:
+            saved_path = local_service.save_upload(file.name or "uploaded-file", content)
+            relative_path = saved_path.relative_to(local_service.root)
+            return LocalResponse(
+                {
+                    "filename": saved_path.name,
+                    "saved_path": str(relative_path),
+                    "size": len(content),
+                    "message": "File uploaded and added to local search.",
+                }
+            )
+        except ValueError as exc:
+            return LocalResponse({"detail": str(exc)}, status_code=400)
     files = {"file": (file.name, file.getvalue(), file.type or "application/octet-stream")}
     return requests.post(f"{st.session_state.backend_url}/upload", files=files, timeout=90)
 
 
 def backend_delete_upload(path: str) -> requests.Response:
+    if direct_mode():
+        local_service = direct_services()["local_service"]
+        try:
+            deleted = local_service.delete_upload(path)
+            return LocalResponse(
+                {
+                    "deleted_path": str(deleted.relative_to(local_service.root)),
+                    "message": "Uploaded file removed from the searchable corpus.",
+                }
+            )
+        except FileNotFoundError as exc:
+            return LocalResponse({"detail": str(exc)}, status_code=404)
+        except ValueError as exc:
+            return LocalResponse({"detail": str(exc)}, status_code=400)
     return requests.delete(f"{st.session_state.backend_url}/uploads/{path}", timeout=30)
 
 

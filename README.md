@@ -342,17 +342,37 @@ Local search depends on files being present in `LOCAL_ASSIGNMENT_PATH` on the ba
 
 ## Streamlit Cloud Deployment
 
+The app can run in a single Streamlit Cloud deployment. When `FASTAPI_URL` is blank, `direct`, or `http://localhost:8000`, the Streamlit app runs the backend agent in-process instead of calling a separate FastAPI server.
+
 1. Deploy from GitHub.
 2. Set the app path to `frontend/streamlit_app.py`.
-3. Add secret or environment variable:
+3. Keep `FASTAPI_URL` unset, or set it to:
 
 ```env
-FASTAPI_URL=https://your-railway-backend.up.railway.app
+FASTAPI_URL=http://localhost:8000
 ```
 
-4. Deploy and confirm the sidebar health check is green.
+4. Add these secrets/environment variables:
 
-The Streamlit app talks to FastAPI through `FASTAPI_URL`, so it will show backend health in the sidebar. If the backend has slept, the first chat/upload request may take longer while Railway wakes the service.
+```env
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=openai/gpt-oss-120b
+SEARCH_UPLOADS_ONLY=false
+CORS_ORIGINS=*
+MAX_SEARCH_RESULTS=10
+LOG_LEVEL=INFO
+```
+
+5. For Google Drive search, also add:
+
+```env
+GOOGLE_DRIVE_FOLDER_ID=your_drive_folder_id
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+```
+
+6. Deploy and confirm the sidebar health check is green.
+
+If you later deploy FastAPI separately, set `FASTAPI_URL` to that backend URL and the Streamlit UI will call it over HTTP.
 
 ## Screenshot Placeholders
 
