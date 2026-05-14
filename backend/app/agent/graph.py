@@ -283,25 +283,28 @@ class DriveDiscoveryAgent:
     @staticmethod
     def _is_context_followup(message: str) -> bool:
         lowered = message.lower().strip()
-        context_words = (
-            "it",
-            "that",
-            "this",
-            "those",
-            "them",
-            "previous",
-            "above",
-            "same",
-            "clean",
-            "summarize",
-            "summary",
-            "open",
-            "show source",
-            "ocr output",
+        # Use word-boundary matching to avoid false positives
+        # (e.g. "it" matching inside "extracted")
+        context_patterns = (
+            r"\bit\b",
+            r"\bthat\b",
+            r"\bthis\b",
+            r"\bthose\b",
+            r"\bthem\b",
+            r"\bprevious\b",
+            r"\babove\b",
+            r"\bsame\b",
+            r"\bclean\b",
+            r"\bsummarize\b",
+            r"\bsummary\b",
+            r"\bopen\b",
+            r"\bshow source\b",
+            r"\bocr output\b",
         )
-        return any(word in lowered for word in context_words) and not any(
-            word in lowered for word in ("find", "search", "list all", "show all")
-        )
+        exclude_patterns = (r"\bfind\b", r"\bsearch\b", r"\blist all\b", r"\bshow all\b")
+        has_context = any(re.search(pat, lowered) for pat in context_patterns)
+        has_exclude = any(re.search(pat, lowered) for pat in exclude_patterns)
+        return has_context and not has_exclude
 
     @staticmethod
     def _is_text_cleanup_request(message: str) -> bool:

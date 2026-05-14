@@ -27,6 +27,12 @@ class FileSummaryInput(BaseModel):
     path: str = Field(description="Relative or absolute local Assignment folder path to summarize.")
 
 
+class DriveFileSummaryInput(BaseModel):
+    file_id: str = Field(description="Google Drive file ID to download and extract content from.")
+    mime_type: str = Field(description="MIME type of the file (e.g. application/pdf, image/png).")
+    filename: str = Field(description="Display name of the file.")
+
+
 def serialize_results(results: list[FileResult], extra: dict[str, Any] | None = None) -> str:
     payload = extra or {}
     payload["results"] = [result.model_dump() for result in results]
@@ -63,6 +69,27 @@ def build_tools(
         summary = local_service.summarize_file(path)
         return json.dumps({"tool": "FileSummaryTool", "path": path, "summary": summary})
 
+    def drive_summarize_file(file_id: str, mime_type: str, filename: str) -> str:
+        """Download a file from Google Drive and extract its text content."""
+        try:
+            content = drive_service.extract_content(
+                file_id=file_id, mime_type=mime_type, filename=filename, max_chars=3000
+            )
+            return json.dumps({
+                "tool": "DriveFileSummaryTool",
+                "file_id": file_id,
+                "filename": filename,
+                "summary": content,
+            })
+        except Exception as exc:
+            return json.dumps({
+                "tool": "DriveFileSummaryTool",
+                "file_id": file_id,
+                "filename": filename,
+                "error": str(exc),
+                "summary": "",
+            })
+
     return [
         StructuredTool.from_function(
             name="DriveSearchTool",
@@ -81,8 +108,18 @@ def build_tools(
         ),
         StructuredTool.from_function(
             name="FileSummaryTool",
-            description="Summarize a specific local file returned by LocalSearchTool.",
+            description="Summarize or extract text from a specific local file returned by LocalSearchTool.",
             func=summarize_file,
             args_schema=FileSummaryInput,
+        ),
+        StructuredTool.from_function(
+            name="DriveFileSummaryTool",
+            description=(
+                "Download a Google Drive file and extract its readable text content. "
+                "Use when the user asks to read, OCR, summarize, or extract content from a Drive file. "
+                "Requires the file_id, mime_type, and filename from a previous DriveSearchTool result."
+            ),
+            func=drive_summarize_file,
+            args_schema=DriveFileSummaryInput,
         ),
     ]
