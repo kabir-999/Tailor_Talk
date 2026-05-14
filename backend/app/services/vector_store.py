@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-import os
+import json
+import requests
+import hashlib
 
-from pinecone import Pinecone
-from app.models.schemas import FileResult
 from app.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -13,81 +13,128 @@ logger = logging.getLogger(__name__)
 class VectorStoreService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        if not settings.pinecone_api_key or not settings.pinecone_index_name:
-            self.pc = None
-            self.index = None
+        self.api_key = settings.pinecone_api_key
+        self.index_name = settings.pinecone_index_name
+        self.host = None
+        
+        if not self.api_key or not self.index_name:
             return
 
+        # Discover the index host URL via REST API (Zero SDK dependencies)
         try:
-            self.pc = Pinecone(api_key=settings.pinecone_api_key)
-            self.index_name = settings.pinecone_index_name
-            self.index = self.pc.Index(self.index_name)
-            logger.info("Connected to Pinecone index: %s", self.index_name)
+            resp = requests.get(
+                f"https://api.pinecone.io/indexes/{self.index_name}",
+                headers={"Api-Key": self.api_key, "X-Pinecone-API-Version": "2024-07"},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                self.host = f"https://{resp.json()['host']}"
+                logger.info("Discovered Pinecone host: %s", self.host)
+            else:
+                logger.error("Failed to discover Pinecone index: %s", resp.text)
         except Exception:
-            logger.exception("Failed to connect to Pinecone")
-            self.pc = None
-            self.index = None
+            logger.exception("Failed to connect to Pinecone Control Plane")
 
     @property
     def configured(self) -> bool:
-        return self.index is not None
+        return self.host is not None and self.api_key is not None
 
     def upsert_document(self, file_id: str, content: str, metadata: dict[str, Any]) -> bool:
-        """Embed and upsert a document chunk into Pinecone."""
+        """Embed and upsert via REST API."""
         if not self.configured or not content.strip():
             return False
 
         try:
-            # Chunk the content if it's too long
             chunks = self._chunk_text(content)
+            vectors = []
+            
             for i, chunk in enumerate(chunks):
-                # Use Pinecone Inference for embeddings (llama-text-embed-v2)
-                embedding_response = self.pc.inference.embed(
-                    model="llama-text-embed-v2",
-                    inputs=[chunk],
-                    parameters={"input_type": "passage"}
+                # Use Pinecone Inference REST API for embeddings
+                embed_resp = requests.post(
+                    "https://api.pinecone.io/embed",
+                    headers={"Api-Key": self.api_key, "Content-Type": "application/json", "X-Pinecone-API-Version": "2024-07"},
+                    json={
+                        "model": "llama-text-embed-v2",
+                        "inputs": [{"text": chunk}],
+                        "parameters": {"input_type": "passage", "truncate": "END"}
+                    },
+                    timeout=20
                 )
-                vector = embedding_response[0].values
+                if embed_resp.status_code != 200:
+                    logger.error("Pinecone embedding failed: %s", embed_resp.text)
+                    continue
                 
-                # Metadata must be strings/bools/numbers
+                vector_values = embed_resp.json()["data"][0]["values"]
+                
+                # Metadata must be simple types
                 clean_metadata = {k: str(v) if not isinstance(v, (int, float, bool)) else v for k, v in metadata.items()}
                 clean_metadata["text"] = chunk
                 clean_metadata["chunk_index"] = i
 
-                self.index.upsert(
-                    vectors=[(f"{file_id}_{i}", vector, clean_metadata)]
+                vectors.append({
+                    "id": f"{file_id}_{i}",
+                    "values": vector_values,
+                    "metadata": clean_metadata
+                })
+
+            # Batch upsert to the data plane
+            if vectors:
+                upsert_resp = requests.post(
+                    f"{self.host}/vectors/upsert",
+                    headers={"Api-Key": self.api_key, "Content-Type": "application/json"},
+                    json={"vectors": vectors},
+                    timeout=20
                 )
-            return True
+                return upsert_resp.status_code == 200
+            return False
         except Exception:
-            logger.exception("Failed to upsert to Pinecone for %s", file_id)
+            logger.exception("REST Upsert failed")
             return False
 
     def query(self, query_text: str, limit: int = 5) -> list[dict[str, Any]]:
-        """Search Pinecone for relevant chunks."""
+        """Query via REST API."""
         if not self.configured:
             return []
 
         try:
             # Embed the query
-            embedding_response = self.pc.inference.embed(
-                model="llama-text-embed-v2",
-                inputs=[query_text],
-                parameters={"input_type": "query"}
+            embed_resp = requests.post(
+                "https://api.pinecone.io/embed",
+                headers={"Api-Key": self.api_key, "Content-Type": "application/json", "X-Pinecone-API-Version": "2024-07"},
+                json={
+                    "model": "llama-text-embed-v2",
+                    "inputs": [{"text": query_text}],
+                    "parameters": {"input_type": "query", "truncate": "END"}
+                },
+                timeout=20
             )
-            vector = embedding_response[0].values
+            if embed_resp.status_code != 200:
+                return []
+            
+            vector_values = embed_resp.json()["data"][0]["values"]
 
-            results = self.index.query(
-                vector=vector,
-                top_k=limit,
-                include_metadata=True
+            # Query the data plane
+            query_resp = requests.post(
+                f"{self.host}/query",
+                headers={"Api-Key": self.api_key, "Content-Type": "application/json"},
+                json={
+                    "vector": vector_values,
+                    "topK": limit,
+                    "includeMetadata": True
+                },
+                timeout=20
             )
             
+            if query_resp.status_code != 200:
+                return []
+            
+            matches = query_resp.json().get("matches", [])
             output = []
-            for match in results.matches:
-                meta = match.metadata
+            for match in matches:
+                meta = match.get("metadata", {})
                 output.append({
                     "content": meta.get("text", ""),
-                    "score": match.score,
+                    "score": match.get("score", 0),
                     "name": meta.get("name", "Unknown"),
                     "path": meta.get("path", ""),
                     "source": meta.get("source", "local"),
@@ -95,7 +142,7 @@ class VectorStoreService:
                 })
             return output
         except Exception:
-            logger.exception("Pinecone query failed")
+            logger.exception("REST Query failed")
             return []
 
     def _chunk_text(self, text: str, chunk_size: int = 1500) -> list[str]:
