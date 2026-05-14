@@ -394,6 +394,8 @@ class LocalSearchService:
         return None
 
     def _write_cached_document(self, path: Path, content: str, allow_ocr: bool) -> None:
+        if allow_ocr and "OCR unavailable" in content:
+            return
         try:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             stat = path.stat()
@@ -409,7 +411,8 @@ class LocalSearchService:
 
     def _cache_path(self, path: Path, allow_ocr: bool) -> Path:
         mode = "ocr" if allow_ocr else "basic"
-        digest = hashlib.sha256(f"{mode}:{path.resolve()}".encode()).hexdigest()
+        ocr_runtime = "tesseract-on" if allow_ocr and self._tesseract_available() else "tesseract-off"
+        digest = hashlib.sha256(f"{mode}:{ocr_runtime}:{path.resolve()}".encode()).hexdigest()
         return self.cache_dir / f"{digest}.json"
 
     @staticmethod
