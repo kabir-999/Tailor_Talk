@@ -81,6 +81,7 @@ def direct_services() -> dict[str, Any]:
     drive_service = GoogleDriveService(settings)
     local_service = LocalSearchService(
         settings.local_assignment_dir,
+        settings=settings,
         uploads_only=settings.search_uploads_only,
     )
     memory = SQLiteMemory(settings.local_assignment_dir / "memory.db")

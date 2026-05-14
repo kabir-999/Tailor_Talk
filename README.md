@@ -2,7 +2,7 @@
 
 Production-ready conversational file discovery over a local `Assignment/` folder, with uploads for new PDFs, Word documents, spreadsheets, CSVs, and text files.
 
-The app uses FastAPI for the backend, LangChain tool calling with Groq for the agent, and Streamlit for the chat UI. It runs without Docker and is ready for Railway plus Streamlit Cloud deployment. Google Drive support still exists in the backend, but it is optional and not used by the local-only UI.
+The app uses FastAPI for the backend, LangChain tool calling with Gemini for the agent, and Streamlit for the chat UI. It runs without Docker and is ready for Railway plus Streamlit Cloud deployment. Google Drive support still exists in the backend, but it is optional and not used by the local-only UI.
 
 ## Features
 
@@ -65,8 +65,8 @@ cp .env.example .env
 Edit `backend/.env`:
 
 ```env
-GROQ_API_KEY=your_groq_key
-GROQ_MODEL=openai/gpt-oss-120b
+Gemini_API_KEY=your_Gemini_key
+Gemini_MODEL=openai/gpt-oss-120b
 FASTAPI_URL=http://localhost:8000
 LOCAL_ASSIGNMENT_PATH=../Assignment
 CORS_ORIGINS=*
@@ -103,12 +103,12 @@ If you do want Drive search later:
 4. Give Viewer access.
 5. Copy the folder ID from the URL and set `GOOGLE_DRIVE_FOLDER_ID`.
 
-### 4. Groq API
+### 4. Gemini API
 
-Create a Groq API key in the Groq console and set `GROQ_API_KEY` in `.env`. The default model is:
+Create a Gemini API key in the Gemini console and set `Gemini_API_KEY` in `.env`. The default model is:
 
 ```env
-GROQ_MODEL=openai/gpt-oss-120b
+Gemini_MODEL=openai/gpt-oss-120b
 ```
 
 ## Run Locally
@@ -143,7 +143,7 @@ Basic service metadata.
 
 ### `GET /health`
 
-Returns backend status and whether Groq, Google Drive, and the local folder are configured.
+Returns backend status and whether Gemini, Google Drive, and the local folder are configured.
 
 ### `POST /chat`
 
@@ -231,7 +231,7 @@ The backend creates shared services at startup:
 
 - `GoogleDriveService`: optional service account auth, Drive query execution, pagination, metadata extraction
 - `LocalSearchService`: upload handling, upload-only search scope, file traversal, text extraction, image OCR, video metadata/frame OCR, filename/content search, TF-IDF semantic fallback
-- `DriveDiscoveryAgent`: LangChain Groq model with tool calling, memory, search refinement, final response generation
+- `DriveDiscoveryAgent`: LangChain Gemini model with tool calling, memory, search refinement, final response generation
 - `ConversationMemory`: in-memory multi-turn message and search history store
 
 Search results are normalized into:
@@ -261,8 +261,8 @@ Deploy the FastAPI backend to Railway and the Streamlit UI separately. Railway s
 5. Add environment variables:
 
 ```env
-GROQ_API_KEY=your_groq_key
-GROQ_MODEL=openai/gpt-oss-120b
+Gemini_API_KEY=your_Gemini_key
+Gemini_MODEL=openai/gpt-oss-120b
 SEARCH_UPLOADS_ONLY=false
 CORS_ORIGINS=*
 MAX_SEARCH_RESULTS=10
@@ -291,7 +291,7 @@ After deployment, open:
 https://your-railway-backend.up.railway.app/health
 ```
 
-The response should show `status: "ok"`, `groq_configured: true`, and `local_folder_exists: true`.
+The response should show `status: "ok"`, `Gemini_configured: true`, and `local_folder_exists: true`.
 
 ## Fly.io Deployment
 
@@ -308,8 +308,8 @@ Add these app secrets/environment variables:
 
 ```env
 PORT=8080
-GROQ_API_KEY=your_groq_key
-GROQ_MODEL=openai/gpt-oss-120b
+Gemini_API_KEY=your_Gemini_key
+Gemini_MODEL=openai/gpt-oss-120b
 FASTAPI_URL=http://localhost:8000
 SEARCH_UPLOADS_ONLY=false
 CORS_ORIGINS=*
@@ -356,8 +356,8 @@ FASTAPI_URL=http://localhost:8000
 4. Add these secrets/environment variables:
 
 ```env
-GROQ_API_KEY=your_groq_key
-GROQ_MODEL=openai/gpt-oss-120b
+Gemini_API_KEY=your_Gemini_key
+Gemini_MODEL=openai/gpt-oss-120b
 SEARCH_UPLOADS_ONLY=false
 CORS_ORIGINS=*
 MAX_SEARCH_RESULTS=10

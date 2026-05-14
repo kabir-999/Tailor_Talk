@@ -17,6 +17,7 @@ from PyPDF2 import PdfReader
 
 from app.models.schemas import FileResult
 from app.services.embeddings import semantic_scores
+from app.services.vector_store import VectorStoreService
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +59,11 @@ class LocalQuery:
 
 
 class LocalSearchService:
-    def __init__(self, root: Path, uploads_only: bool = True) -> None:
+    def __init__(self, root: Path, settings: Any = None, uploads_only: bool = True) -> None:
         self.root = root
         self.uploads_only = uploads_only
         self.cache_dir = self.root / ".search_cache"
+        self.vector_store = VectorStoreService(settings) if settings else None
 
     @property
     def configured(self) -> bool:
@@ -98,10 +100,37 @@ class LocalSearchService:
                 docs = [*docs, *ocr_docs]
                 ranked = self._rank_documents(docs, parsed)
 
+        # Vector Semantic Search (Pinecone)
+        vector_results = []
+        if self.vector_store and self.vector_store.configured:
+            vector_matches = self.vector_store.query(query, limit=limit)
+            for match in vector_matches:
+                # Convert vector match to FileResult
+                res = FileResult(
+                    name=match["name"],
+                    type=match["type"],
+                    path=match["path"],
+                    source=match["source"],
+                    confidence=round(match["score"], 2),
+                    summary=match["content"][:300] + "...",
+                )
+                vector_results.append(res)
+
         ranked.sort(key=lambda item: item[0], reverse=True)
         results = [self._to_result(doc, score) for score, doc in ranked[:limit]]
+        
+        # Merge vector results with ranked keyword results
+        if vector_results:
+            seen_paths = {r.path for r in results}
+            for v_res in vector_results:
+                if v_res.path not in seen_paths:
+                    results.append(v_res)
+            results.sort(key=lambda r: r.confidence, reverse=True)
+            results = results[:limit]
+
         scope = "uploaded files only" if self.uploads_only else "Assignment folder"
-        return results, f"{scope}: fast filters first, cached extraction, OCR only when needed"
+        explanation = f"{scope}: Vector semantic search + keyword filters" if vector_results else f"{scope}: keyword filters first"
+        return results, explanation
 
     def _rank_documents(self, docs: list[LocalDocument], parsed: LocalQuery) -> list[tuple[float, LocalDocument]]:
         if parsed.terms or parsed.phrases:
@@ -145,6 +174,20 @@ class LocalSearchService:
         if not doc.content:
             return f"{candidate.name} has no extractable text content."
         text = " ".join(doc.content.split())
+        
+        # Auto-index into Pinecone if not already there
+        if self.vector_store and self.vector_store.configured:
+            self.vector_store.upsert_document(
+                file_id=hashlib.md5(str(candidate).encode()).hexdigest(),
+                content=text,
+                metadata={
+                    "name": candidate.name,
+                    "path": str(candidate.relative_to(self.root)),
+                    "type": candidate.suffix.lower().lstrip("."),
+                    "source": "local"
+                }
+            )
+            
         return text[:max_chars] + ("..." if len(text) > max_chars else "")
 
     def save_upload(self, filename: str, content: bytes) -> Path:

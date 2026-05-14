@@ -53,10 +53,11 @@ FINAL_RESPONSE_PROMPT = """
 Write only the direct search result answer from the tool outputs below.
 
 Rules:
-- Be compact.
+- Be compact and helpful.
+- If `semantic_context` is provided, use it to answer the user's specific questions about document content (this is highly relevant context from the Vector Database).
 - Do not include headings like "next steps", "suggestions", or "follow-up prompts".
 - Mention only the best matching files in the answer text.
-- If the user asks what a file says, reads, contains, summarizes, or asks for OCR, answer from the file summary/extracted text in the tool output. This applies to BOTH local files AND Google Drive files.
+- If the user asks what a file says, reads, contains, summarizes, or asks for OCR, answer from the file summary/extracted text OR the `semantic_context` in the tool output. This applies to BOTH local files AND Google Drive files.
 - NEVER say you can only extract content from local files. Content extraction works for all file sources.
 - Otherwise, do not include file preview snippets.
 - End with exactly one short next-prompt suggestion in this format: `Next prompt: "..."`

@@ -114,7 +114,13 @@ class DriveDiscoveryAgent:
                 suggested_followups=[],
                 search_history=self.memory.search_history(conversation_id),
             )
-        answer = self._final_answer(message, search_mode, tool_payloads, results, previous_results)
+
+        # Enhance results with Pinecone context if available
+        pinecone_context = []
+        if self.local_service.vector_store and self.local_service.vector_store.configured:
+            pinecone_context = self.local_service.vector_store.query(message, limit=3)
+
+        answer = self._final_answer(message, search_mode, tool_payloads, results, previous_results, pinecone_context)
         self.memory.append_ai(conversation_id, answer)
         self.memory.add_search(
             conversation_id,
@@ -229,6 +235,7 @@ class DriveDiscoveryAgent:
         tool_payloads: list[dict[str, Any]],
         results: list[FileResult],
         previous_results: list[dict[str, Any]] | None = None,
+        pinecone_context: list[dict[str, Any]] | None = None,
     ) -> str:
         if self.llm:
             try:
@@ -242,6 +249,7 @@ class DriveDiscoveryAgent:
                                     "search_mode": search_mode.value,
                                     "tool_outputs": tool_payloads,
                                     "previous_results": previous_results or [],
+                                    "semantic_context": pinecone_context or [],
                                 },
                                 default=str,
                             )
@@ -298,6 +306,12 @@ class DriveDiscoveryAgent:
             r"\bsummarize\b",
             r"\bsummary\b",
             r"\bopen\b",
+            r"\btext\b",
+            r"\bextracted\b",
+            r"\bdocument\b",
+            r"\bfile\b",
+            r"\bcontent\b",
+            r"\bread\b",
             r"\bshow source\b",
             r"\bocr output\b",
         )
