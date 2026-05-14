@@ -65,6 +65,10 @@ class LocalResponse:
 
 @st.cache_resource
 def direct_services() -> dict[str, Any]:
+    import sys
+    # Force clear stale memory module from sys.modules if it exists
+    sys.modules.pop("app.agent.memory", None)
+    
     from app.agent.graph import DriveDiscoveryAgent
     from app.agent.sqlite_memory import SQLiteMemory
     from app.config import get_settings
