@@ -14,6 +14,7 @@ class ConversationMemory:
         self._messages: dict[str, list[BaseMessage]] = defaultdict(list)
         self._history: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self._last_results: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        self._last_extracted_text: dict[str, str] = {}
         self._lock = Lock()
 
     def new_id(self) -> str:
@@ -46,11 +47,20 @@ class ConversationMemory:
         with self._lock:
             return list(self._last_results[conversation_id])
 
+    def set_last_extracted_text(self, conversation_id: str, text: str) -> None:
+        with self._lock:
+            self._last_extracted_text[conversation_id] = text
+
+    def last_extracted_text(self, conversation_id: str) -> str:
+        with self._lock:
+            return self._last_extracted_text.get(conversation_id, "")
+
     def reset(self, conversation_id: str) -> None:
         with self._lock:
             self._messages.pop(conversation_id, None)
             self._history.pop(conversation_id, None)
             self._last_results.pop(conversation_id, None)
+            self._last_extracted_text.pop(conversation_id, None)
 
     def _append(self, conversation_id: str, message: BaseMessage) -> None:
         with self._lock:

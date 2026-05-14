@@ -95,7 +95,7 @@ class DriveDiscoveryAgent:
         if results:
             self.memory.set_last_results(conversation_id, [result.model_dump() for result in results])
         if self._is_content_request(message) and results:
-            answer = self._content_answer(message, results, previous_results)
+            answer = self._content_answer(message, conversation_id, results, previous_results)
             self.memory.append_ai(conversation_id, answer)
             self.memory.add_search(
                 conversation_id,
@@ -336,6 +336,7 @@ class DriveDiscoveryAgent:
     def _content_answer(
         self,
         message: str,
+        conversation_id: str,
         results: list[FileResult],
         previous_results: list[dict[str, Any]] | None = None,
     ) -> str:
@@ -348,6 +349,7 @@ class DriveDiscoveryAgent:
             )
 
         extracted = self.local_service.summarize_file(result.path, max_chars=3000)
+        self.memory.set_last_extracted_text(conversation_id, extracted)
         if self.llm and any(word in message.lower() for word in ("summarize", "summary")):
             try:
                 response = self.llm.invoke(
@@ -430,6 +432,10 @@ class DriveDiscoveryAgent:
         return f"{cleaned}\n\nNext prompt: \"Summarize this cleaned text\""
 
     def _cleanup_source_text(self, message: str, conversation_id: str) -> str:
+        extracted_text = self.memory.last_extracted_text(conversation_id)
+        if extracted_text.strip():
+            return extracted_text
+
         lowered = message.lower()
         markers = (
             "i mean clean and properly format this",
