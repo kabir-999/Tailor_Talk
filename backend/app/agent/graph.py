@@ -439,10 +439,10 @@ class DriveDiscoveryAgent:
                 messages = [
                     SystemMessage(
                         content=(
-                            "Clean and properly format noisy OCR/chat text. "
-                            "Do not search for files. Do not mention missing files. "
-                            "Preserve useful factual content, remove obvious OCR garbage, "
-                            "fix spacing and line breaks, and return only the cleaned text."
+                            "You are a text cleanup assistant. Your ONLY job is to clean and format the provided noisy OCR/chat text.\n"
+                            "Do not search for files. Do not mention missing files. Do NOT repeat previous user queries.\n"
+                            "Preserve useful factual content, remove obvious OCR garbage (like UI artifacts, timestamps, garbled characters),\n"
+                            "fix spacing and line breaks, and return ONLY the cleaned text."
                         )
                     ),
                     *self.memory.get_messages(conversation_id),
