@@ -66,7 +66,7 @@ class LocalResponse:
 @st.cache_resource
 def direct_services() -> dict[str, Any]:
     from app.agent.graph import DriveDiscoveryAgent
-    from app.agent.memory import SQLiteMemory
+    from app.agent.sqlite_memory import SQLiteMemory
     from app.config import get_settings
     from app.services.drive_service import GoogleDriveService
     from app.services.local_search import LocalSearchService

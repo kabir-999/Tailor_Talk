@@ -7,7 +7,7 @@ from fastapi import File, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent.graph import DriveDiscoveryAgent
-from app.agent.memory import SQLiteMemory
+from app.agent.sqlite_memory import SQLiteMemory
 from app.config import get_settings
 from app.models.schemas import (
     ChatRequest,
